@@ -61,9 +61,65 @@ func (s *PostgresStore) Ping(ctx context.Context) error {
 	return s.db.PingContext(ctx)
 }
 
-// Migrate applies database migrations.
+// migrationLockKey is a stable pg_advisory_lock key shared by all Hub replicas.
+const migrationLockKey = 0x5C104DB5 // "SCION" in hex-ish
+
+// Migrate applies outstanding database migrations under an advisory lock so that
+// concurrent Hub replicas do not race on first startup.
 func (s *PostgresStore) Migrate(ctx context.Context) error {
-	return errNotImplemented
+	// Acquire session-level advisory lock — released automatically when the
+	// connection is returned to the pool (or closed).
+	if _, err := s.db.ExecContext(ctx, "SELECT pg_advisory_lock($1)", migrationLockKey); err != nil {
+		return fmt.Errorf("postgres migrate: acquire advisory lock: %w", err)
+	}
+	defer s.db.ExecContext(ctx, "SELECT pg_advisory_unlock($1)", migrationLockKey) //nolint:errcheck
+
+	// Ensure schema_migrations table exists before we query it.
+	if _, err := s.db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
+		version    INTEGER PRIMARY KEY,
+		applied_at TIMESTAMPTZ DEFAULT NOW()
+	)`); err != nil {
+		return fmt.Errorf("postgres migrate: create schema_migrations: %w", err)
+	}
+
+	var current int
+	row := s.db.QueryRowContext(ctx, "SELECT COALESCE(MAX(version),0) FROM schema_migrations")
+	if err := row.Scan(&current); err != nil {
+		return fmt.Errorf("postgres migrate: query current version: %w", err)
+	}
+
+	type migration struct {
+		version int
+		sql     string
+	}
+	migrations := []migration{
+		{1, migrationV1},
+	}
+
+	for _, m := range migrations {
+		if current >= m.version {
+			continue
+		}
+		tx, err := s.db.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("postgres migrate v%d: begin tx: %w", m.version, err)
+		}
+		if _, err := tx.ExecContext(ctx, m.sql); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("postgres migrate v%d: apply: %w", m.version, err)
+		}
+		if _, err := tx.ExecContext(ctx,
+			"INSERT INTO schema_migrations (version, applied_at) VALUES ($1, $2)",
+			m.version, time.Now().UTC(),
+		); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("postgres migrate v%d: record version: %w", m.version, err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("postgres migrate v%d: commit: %w", m.version, err)
+		}
+	}
+	return nil
 }
 
 // ============================================================================
