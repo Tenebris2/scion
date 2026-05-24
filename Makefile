@@ -16,7 +16,7 @@ GOLANGCI_LINT := $(shell command -v golangci-lint 2>/dev/null || echo $(shell go
 
 .DEFAULT_GOAL := help
 
-.PHONY: all build install test test-fast vet lint golangci-lint web web-typecheck fmt fmt-check ci ci-full clean help container-sciontool container-scion container-binaries
+.PHONY: all build install test test-fast test-postgres vet lint golangci-lint web web-typecheck fmt fmt-check ci ci-full clean help container-sciontool container-scion container-binaries
 
 ## all: Build the web frontend, then compile the Go binary with embedded assets
 all: web install
@@ -51,6 +51,12 @@ install: build
 test:
 	@echo "Running tests..."
 	@go test ./...
+
+## test-postgres: Run postgres conformance tests (requires SCION_TEST_POSTGRES_DSN)
+test-postgres:
+	@echo "Running postgres conformance tests..."
+	@SCION_TEST_POSTGRES_DSN="$${SCION_TEST_POSTGRES_DSN:?set SCION_TEST_POSTGRES_DSN}" \
+		go test ./pkg/store/postgres/... -run TestConformance -v
 
 ## test-fast: Run tests without SQLite (lower memory usage)
 test-fast:
