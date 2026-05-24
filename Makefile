@@ -52,11 +52,30 @@ test:
 	@echo "Running tests..."
 	@go test ./...
 
-## test-postgres: Run postgres conformance tests (requires SCION_TEST_POSTGRES_DSN)
+## test-postgres: Run postgres conformance tests in Docker (no local postgres required)
 test-postgres:
-	@echo "Running postgres conformance tests..."
-	@SCION_TEST_POSTGRES_DSN="$${SCION_TEST_POSTGRES_DSN:?set SCION_TEST_POSTGRES_DSN}" \
-		go test ./pkg/store/postgres/... -run TestConformance -v
+	@echo "Starting postgres and running conformance tests in containers..."; \
+	docker network create scion-test-net 2>/dev/null || true; \
+	docker run -d --name scion-pg-test \
+		--network scion-test-net \
+		-e POSTGRES_USER=scion \
+		-e POSTGRES_PASSWORD=scion \
+		-e POSTGRES_DB=scion_test \
+		postgres:16-alpine; \
+	until docker exec scion-pg-test pg_isready -U scion -q 2>/dev/null; do sleep 1; done; \
+	docker run --rm \
+		--network scion-test-net \
+		-v "$(CURDIR)":/workspace \
+		-w /workspace \
+		-v scion-gomod-cache:/go/pkg/mod \
+		-e SCION_TEST_POSTGRES_DSN="postgres://scion:scion@scion-pg-test:5432/scion_test?sslmode=disable" \
+		golang:1.25-alpine \
+		go test ./pkg/store/postgres/... -run TestConformance -v; \
+	EXIT=$$?; \
+	docker stop scion-pg-test; \
+	docker rm scion-pg-test; \
+	docker network rm scion-test-net; \
+	exit $$EXIT
 
 ## test-fast: Run tests without SQLite (lower memory usage)
 test-fast:
