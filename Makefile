@@ -16,7 +16,7 @@ GOLANGCI_LINT := $(shell command -v golangci-lint 2>/dev/null || echo $(shell go
 
 .DEFAULT_GOAL := help
 
-.PHONY: all build install test test-fast test-postgres vet lint golangci-lint web web-typecheck fmt fmt-check ci ci-full clean help container-sciontool container-scion container-binaries
+.PHONY: all build install test test-fast test-postgres dev-postgres vet lint golangci-lint web web-typecheck fmt fmt-check ci ci-full clean help container-sciontool container-scion container-binaries
 
 ## all: Build the web frontend, then compile the Go binary with embedded assets
 all: web install
@@ -76,6 +76,11 @@ test-postgres:
 	docker rm scion-pg-test; \
 	docker network rm scion-test-net; \
 	exit $$EXIT
+
+## dev-postgres: Run scion server + postgres via Docker Compose (Ctrl+C to stop)
+dev-postgres:
+	@docker compose -f docker-compose.dev-postgres.yml down 2>/dev/null || true
+	@docker compose -f docker-compose.dev-postgres.yml up --remove-orphans
 
 ## test-fast: Run tests without SQLite (lower memory usage)
 test-fast:
