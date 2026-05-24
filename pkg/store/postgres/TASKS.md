@@ -17,14 +17,13 @@ Wired `entc.OpenPostgres` + `entc.AutoMigrate` + `entadapter.NewCompositeStore` 
 
 ## #9 — Add Ent adapter conformance tests for Postgres
 
-**Status:** pending  
-**Files:** `pkg/store/entadapter/composite_test.go`, `group_store_test.go`, `policy_store_test.go`
+**Status:** done  
+**Files:** 
+- Suite runners: `pkg/store/entadapter/{composite,group_store,policy_store}_suite_test.go`
+- Postgres tests: `pkg/store/entadapter/*_postgres_test.go`
+- Test utilities: `pkg/store/entadapter/postgres_testutils_test.go`
 
-All existing entadapter tests run against SQLite only (`//go:build !no_sqlite`).
-Add a parallel `_postgres_test.go` file that runs the same suites when
-`SCION_TEST_POSTGRES_DSN` is set.
-
-**Pattern to follow:** `pkg/store/postgres/postgres_conformance_test.go`
+Refactored all existing entadapter tests into suite-runner pattern to share test bodies across SQLite and Postgres backends. Created `_postgres_test.go` variants for group, policy, and composite stores that skip unless `SCION_TEST_POSTGRES_DSN` is set. Each subtest truncates and reseeds Ent tables via `truncateEntTables()` helper.
 
 ---
 
@@ -53,3 +52,20 @@ Added opt-in SQL query/result debug logging.
 Enable with env var: `SCION_POSTGRES_DEBUG=1`  
 Or programmatically: `store.SetDebug(true)`  
 See `debug.go` for implementation.
+
+---
+
+## #13 — Separate Ent tables into dedicated Postgres schema
+
+**Status:** done  
+**Files:** 
+- `pkg/ent/entc/client.go` — added `OpenPostgresInSchema`, `appendSchemaToPostgresDSN`
+- `cmd/server_foreground.go` — use `OpenPostgresInSchema(ctx, dsn, "ent")`
+- `pkg/store/entadapter/postgres_testutils_test.go` — use schema-qualified table names
+- `pkg/store/entadapter/*_postgres_test.go` — use `OpenPostgresInSchema`
+
+**Reason:** The main postgres store creates tables with `id TEXT`, while Ent uses `id UUID`. AutoMigrate would try to `ALTER TABLE ... CHANGE COLUMN TYPE`, which fails without a `USING id::uuid` cast.
+
+**Solution:** Create a dedicated `ent` schema in Postgres. All Ent tables (including shadow records for users, agents, projects) live in `ent.*`, while the main store tables stay in `public.*`. This avoids schema conflicts and eliminates the type mismatch.
+
+Ent client connects with `search_path=ent`, so all queries operate within the `ent` namespace. Tests use schema-qualified names (`ent.table_name`) in truncation queries.
