@@ -12,67 +12,58 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !no_sqlite
-
 package entadapter
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/entc"
 	"github.com/stretchr/testify/require"
 )
 
-func newTestPolicyStore(t *testing.T) *PolicyStore {
+func newTestGroupStorePostgres(t *testing.T) *GroupStore {
 	t.Helper()
-	client, err := entc.OpenSQLite("file:" + t.Name() + "?mode=memory&cache=shared")
+	dsn := os.Getenv("SCION_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("SCION_TEST_POSTGRES_DSN not set")
+	}
+
+	client, err := entc.OpenPostgres(dsn)
 	require.NoError(t, err)
 	t.Cleanup(func() { client.Close() })
 	require.NoError(t, entc.AutoMigrate(context.Background(), client))
 
+	truncateEntTables(t, dsn)
+
 	ctx := context.Background()
 
 	_, err = client.User.Create().
-		SetID(policyTestUserUID).
-		SetEmail("alice@example.com").
-		SetDisplayName("Alice").
-		Save(ctx)
-	require.NoError(t, err)
-
-	_, err = client.User.Create().
-		SetID(policyTestUser2UID).
-		SetEmail("bob@example.com").
-		SetDisplayName("Bob").
+		SetID(testUserUID).
+		SetEmail("test@example.com").
+		SetDisplayName("Test User").
 		Save(ctx)
 	require.NoError(t, err)
 
 	project, err := client.Project.Create().
-		SetID(policyTestProjectUID).
+		SetID(testProjectUID).
 		SetName("test-project").
 		SetSlug("test-project").
 		Save(ctx)
 	require.NoError(t, err)
 
 	_, err = client.Agent.Create().
-		SetID(policyTestAgentUID).
+		SetID(testAgentUID).
 		SetName("test-agent").
 		SetSlug("test-agent").
 		SetProject(project).
 		Save(ctx)
 	require.NoError(t, err)
 
-	_, err = client.Group.Create().
-		SetID(policyTestGroupUID).
-		SetName("Test Group").
-		SetSlug("test-group").
-		SetGroupType("explicit").
-		Save(ctx)
-	require.NoError(t, err)
-
-	return NewPolicyStore(client)
+	return NewGroupStore(client)
 }
 
-func TestPolicyStore(t *testing.T) {
-	runPolicyStoreSuite(t, newTestPolicyStore)
+func TestGroupStore_Postgres(t *testing.T) {
+	runGroupStoreSuite(t, newTestGroupStorePostgres)
 }

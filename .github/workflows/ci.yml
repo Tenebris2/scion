@@ -69,6 +69,9 @@ jobs:
       - name: Run Tests
         run: make test-fast
 
+      - name: Run Postgres Tests
+        run: make test-postgres
+
       - name: Build Binary
         run: make build
 

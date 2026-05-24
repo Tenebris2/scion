@@ -18,6 +18,7 @@ package entadapter
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/entc"
@@ -25,25 +26,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// newTestCompositeStore creates a CompositeStore with a real SQLite base store
-// and a separate Ent client, simulating the production dual-database layout.
-func newTestCompositeStore(t *testing.T) *CompositeStore {
+// newTestCompositeStorePostgres creates a CompositeStore backed by an in-memory
+// SQLite base store and a real Postgres Ent client. Requires SCION_TEST_POSTGRES_DSN.
+func newTestCompositeStorePostgres(t *testing.T) *CompositeStore {
 	t.Helper()
+	dsn := os.Getenv("SCION_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("SCION_TEST_POSTGRES_DSN not set")
+	}
 
 	base, err := sqlite.New(":memory:")
 	require.NoError(t, err)
 	require.NoError(t, base.Migrate(context.Background()))
 
-	entClient, err := entc.OpenSQLite("file:" + t.Name() + "?mode=memory&cache=shared")
+	entClient, err := entc.OpenPostgres(dsn)
 	require.NoError(t, err)
 	require.NoError(t, entc.AutoMigrate(context.Background(), entClient))
 
+	truncateEntTables(t, dsn)
+
 	cs := NewCompositeStore(base, entClient)
 	t.Cleanup(func() { cs.Close() })
-
 	return cs
 }
 
-func TestCompositeStore(t *testing.T) {
-	runCompositeStoreSuite(t, newTestCompositeStore)
+func TestCompositeStore_Postgres(t *testing.T) {
+	runCompositeStoreSuite(t, newTestCompositeStorePostgres)
 }

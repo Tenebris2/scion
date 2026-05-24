@@ -648,7 +648,17 @@ func initStore(cfg *config.GlobalConfig) (store.Store, error) {
 			pgStore.Close()
 			return nil, fmt.Errorf("postgres ping failed: %w", err)
 		}
-		return pgStore, nil
+		entClient, err := entc.OpenPostgres(cfg.Database.URL)
+		if err != nil {
+			pgStore.Close()
+			return nil, fmt.Errorf("failed to open ent database: %w", err)
+		}
+		if err := entc.AutoMigrate(context.Background(), entClient); err != nil {
+			entClient.Close()
+			pgStore.Close()
+			return nil, fmt.Errorf("failed to run ent migrations: %w", err)
+		}
+		return entadapter.NewCompositeStore(pgStore, entClient), nil
 	case "sqlite":
 		sqliteStore, err := sqlite.New(cfg.Database.URL)
 		if err != nil {
