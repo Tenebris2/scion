@@ -39,7 +39,7 @@ func newTestCompositeStorePostgres(t *testing.T) *CompositeStore {
 	require.NoError(t, err)
 	require.NoError(t, base.Migrate(context.Background()))
 
-	entClient, err := entc.OpenPostgres(dsn)
+	entClient, err := entc.OpenPostgresInSchema(context.Background(), dsn, "ent")
 	require.NoError(t, err)
 	require.NoError(t, entc.AutoMigrate(context.Background(), entClient))
 

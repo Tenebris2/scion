@@ -648,7 +648,7 @@ func initStore(cfg *config.GlobalConfig) (store.Store, error) {
 			pgStore.Close()
 			return nil, fmt.Errorf("postgres ping failed: %w", err)
 		}
-		entClient, err := entc.OpenPostgres(cfg.Database.URL)
+		entClient, err := entc.OpenPostgresInSchema(context.Background(), cfg.Database.URL, "ent")
 		if err != nil {
 			pgStore.Close()
 			return nil, fmt.Errorf("failed to open ent database: %w", err)

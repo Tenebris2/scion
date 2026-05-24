@@ -30,7 +30,7 @@ func newTestPolicyStorePostgres(t *testing.T) *PolicyStore {
 		t.Skip("SCION_TEST_POSTGRES_DSN not set")
 	}
 
-	client, err := entc.OpenPostgres(dsn)
+	client, err := entc.OpenPostgresInSchema(context.Background(), dsn, "ent")
 	require.NoError(t, err)
 	t.Cleanup(func() { client.Close() })
 	require.NoError(t, entc.AutoMigrate(context.Background(), client))

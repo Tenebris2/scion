@@ -23,8 +23,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// truncateEntTables removes all rows from every Ent-managed table so each
-// Postgres test starts with a clean slate. CASCADE handles FK ordering.
+// truncateEntTables removes all rows from every Ent-managed table in the "ent"
+// schema so each Postgres test starts with a clean slate. CASCADE handles FK ordering.
 func truncateEntTables(t *testing.T, dsn string) {
 	t.Helper()
 	db, err := sql.Open("pgx", dsn)
@@ -32,14 +32,14 @@ func truncateEntTables(t *testing.T, dsn string) {
 	defer db.Close()
 	_, err = db.ExecContext(context.Background(), `
 		TRUNCATE TABLE
-			group_memberships,
-			policy_bindings,
-			group_child_groups,
-			groups,
-			access_policies,
-			agents,
-			users,
-			projects
+			ent.group_memberships,
+			ent.policy_bindings,
+			ent.group_child_groups,
+			ent.groups,
+			ent.access_policies,
+			ent.agents,
+			ent.users,
+			ent.projects
 		CASCADE
 	`)
 	require.NoError(t, err)
