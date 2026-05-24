@@ -16,7 +16,7 @@ GOLANGCI_LINT := $(shell command -v golangci-lint 2>/dev/null || echo $(shell go
 
 .DEFAULT_GOAL := help
 
-.PHONY: all build install test test-fast vet lint golangci-lint web web-typecheck fmt fmt-check ci ci-full clean help container-sciontool container-scion container-binaries
+.PHONY: all build install test test-fast test-postgres dev-postgres dev-postgres-down dev-postgres-restart vet lint golangci-lint web web-typecheck fmt fmt-check ci ci-full clean help container-sciontool container-scion container-binaries
 
 ## all: Build the web frontend, then compile the Go binary with embedded assets
 all: web install
@@ -51,6 +51,47 @@ install: build
 test:
 	@echo "Running tests..."
 	@go test ./...
+
+## test-postgres: Run postgres conformance tests in Docker (no local postgres required)
+test-postgres:
+	@echo "Starting postgres and running conformance tests in containers..."; \
+	docker network create scion-test-net 2>/dev/null || true; \
+	docker run -d --name scion-pg-test \
+		--network scion-test-net \
+		-e POSTGRES_USER=scion \
+		-e POSTGRES_PASSWORD=scion \
+		-e POSTGRES_DB=scion_test \
+		postgres:16-alpine; \
+	until docker exec scion-pg-test pg_isready -U scion -q 2>/dev/null; do sleep 1; done; \
+	docker run --rm \
+		--network scion-test-net \
+		-v "$(CURDIR)":/workspace \
+		-w /workspace \
+		-v scion-gomod-cache:/go/pkg/mod \
+		-e SCION_TEST_POSTGRES_DSN="postgres://scion:scion@scion-pg-test:5432/scion_test?sslmode=disable" \
+		golang:1.25-alpine \
+		go test ./pkg/store/postgres/... -run TestConformance -v; \
+	EXIT=$$?; \
+	docker stop scion-pg-test; \
+	docker rm scion-pg-test; \
+	docker network rm scion-test-net; \
+	exit $$EXIT
+
+## dev-postgres: Start/restart scion server + postgres via Docker Compose (Ctrl+C to stop)
+dev-postgres:
+	@if docker compose -f docker-compose.dev-postgres.yml ps --services --filter "status=running" | grep -q .; then \
+		docker compose -f docker-compose.dev-postgres.yml restart server; \
+	else \
+		docker compose -f docker-compose.dev-postgres.yml up --remove-orphans; \
+	fi
+
+## dev-postgres-down: Tear down dev-postgres Docker instances
+dev-postgres-down:
+	@docker compose -f docker-compose.dev-postgres.yml down
+
+## dev-postgres-restart: Restart the server container (recompiles code)
+dev-postgres-restart:
+	@docker compose -f docker-compose.dev-postgres.yml restart server
 
 ## test-fast: Run tests without SQLite (lower memory usage)
 test-fast:

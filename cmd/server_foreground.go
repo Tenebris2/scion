@@ -47,7 +47,9 @@ import (
 	"github.com/GoogleCloudPlatform/scion/pkg/storage"
 	"github.com/GoogleCloudPlatform/scion/pkg/store"
 	"github.com/GoogleCloudPlatform/scion/pkg/store/entadapter"
+	"github.com/GoogleCloudPlatform/scion/pkg/store/postgres"
 	"github.com/GoogleCloudPlatform/scion/pkg/store/sqlite"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/GoogleCloudPlatform/scion/pkg/util"
 	"github.com/GoogleCloudPlatform/scion/pkg/util/logging"
 	"github.com/spf13/cobra"
@@ -633,6 +635,30 @@ func checkServerPorts(cfg *config.GlobalConfig) error {
 // initStore initializes the database store.
 func initStore(cfg *config.GlobalConfig) (store.Store, error) {
 	switch cfg.Database.Driver {
+	case "postgres":
+		pgStore, err := postgres.New(cfg.Database.URL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open postgres database: %w", err)
+		}
+		if err := pgStore.Migrate(context.Background()); err != nil {
+			pgStore.Close()
+			return nil, fmt.Errorf("failed to run postgres migrations: %w", err)
+		}
+		if err := pgStore.Ping(context.Background()); err != nil {
+			pgStore.Close()
+			return nil, fmt.Errorf("postgres ping failed: %w", err)
+		}
+		entClient, err := entc.OpenPostgresInSchema(context.Background(), cfg.Database.URL, "ent")
+		if err != nil {
+			pgStore.Close()
+			return nil, fmt.Errorf("failed to open ent database: %w", err)
+		}
+		if err := entc.AutoMigrate(context.Background(), entClient); err != nil {
+			entClient.Close()
+			pgStore.Close()
+			return nil, fmt.Errorf("failed to run ent migrations: %w", err)
+		}
+		return entadapter.NewCompositeStore(pgStore, entClient), nil
 	case "sqlite":
 		sqliteStore, err := sqlite.New(cfg.Database.URL)
 		if err != nil {

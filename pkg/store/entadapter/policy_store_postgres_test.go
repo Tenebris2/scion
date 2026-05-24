@@ -12,24 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !no_sqlite
-
 package entadapter
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/GoogleCloudPlatform/scion/pkg/ent/entc"
 	"github.com/stretchr/testify/require"
 )
 
-func newTestPolicyStore(t *testing.T) *PolicyStore {
+func newTestPolicyStorePostgres(t *testing.T) *PolicyStore {
 	t.Helper()
-	client, err := entc.OpenSQLite("file:" + t.Name() + "?mode=memory&cache=shared")
+	dsn := os.Getenv("SCION_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("SCION_TEST_POSTGRES_DSN not set")
+	}
+
+	client, err := entc.OpenPostgresInSchema(context.Background(), dsn, "ent")
 	require.NoError(t, err)
 	t.Cleanup(func() { client.Close() })
 	require.NoError(t, entc.AutoMigrate(context.Background(), client))
+
+	truncateEntTables(t, dsn)
 
 	ctx := context.Background()
 
@@ -73,6 +79,6 @@ func newTestPolicyStore(t *testing.T) *PolicyStore {
 	return NewPolicyStore(client)
 }
 
-func TestPolicyStore(t *testing.T) {
-	runPolicyStoreSuite(t, newTestPolicyStore)
+func TestPolicyStore_Postgres(t *testing.T) {
+	runPolicyStoreSuite(t, newTestPolicyStorePostgres)
 }
