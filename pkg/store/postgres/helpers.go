@@ -95,7 +95,7 @@ func timeFromPtr(t *time.Time) time.Time {
 	return *t
 }
 
-func boolToInt(b bool) int {
+func boolToInt(b bool) int16 {
 	if b {
 		return 1
 	}

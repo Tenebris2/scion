@@ -35,7 +35,7 @@ func (s *PostgresStore) CreateEnvVar(ctx context.Context, envVar *store.EnvVar) 
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
 	`,
 		envVar.ID, envVar.Key, envVar.Value, envVar.Scope, envVar.ScopeID,
-		envVar.Description, boolToInt(envVar.Sensitive), envVar.InjectionMode, envVar.Secret,
+		envVar.Description, boolToInt(envVar.Sensitive), envVar.InjectionMode, boolToInt(envVar.Secret),
 		envVar.Created, envVar.Updated, envVar.CreatedBy,
 	)
 	if err != nil {
@@ -78,7 +78,7 @@ func (s *PostgresStore) UpdateEnvVar(ctx context.Context, envVar *store.EnvVar) 
 			value = $1, description = $2, sensitive = $3, injection_mode = $4, secret = $5, updated_at = $6
 		WHERE key = $7 AND scope = $8 AND scope_id = $9
 	`,
-		envVar.Value, envVar.Description, boolToInt(envVar.Sensitive), envVar.InjectionMode, envVar.Secret, envVar.Updated,
+		envVar.Value, envVar.Description, boolToInt(envVar.Sensitive), envVar.InjectionMode, boolToInt(envVar.Secret), envVar.Updated,
 		envVar.Key, envVar.Scope, envVar.ScopeID,
 	)
 	if err != nil {

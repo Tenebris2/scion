@@ -80,7 +80,7 @@ func (s *PostgresStore) CreateRuntimeBroker(ctx context.Context, broker *store.R
 		marshalJSON(broker.Capabilities), "[]",
 		"{}", marshalJSON(broker.Profiles),
 		marshalJSON(broker.Labels), marshalJSON(broker.Annotations), broker.Endpoint,
-		broker.Created, broker.Updated, nullableString(broker.CreatedBy), broker.AutoProvide,
+		broker.Created, broker.Updated, nullableString(broker.CreatedBy), boolToInt(broker.AutoProvide),
 	)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key value violates unique constraint") {
@@ -131,7 +131,7 @@ func (s *PostgresStore) UpdateRuntimeBroker(ctx context.Context, broker *store.R
 		marshalJSON(broker.Capabilities), "[]",
 		"{}", marshalJSON(broker.Profiles),
 		marshalJSON(broker.Labels), marshalJSON(broker.Annotations), broker.Endpoint,
-		broker.Updated, broker.AutoProvide,
+		broker.Updated, boolToInt(broker.AutoProvide),
 		broker.ID,
 	)
 	if err != nil {
@@ -184,7 +184,7 @@ func (s *PostgresStore) ListRuntimeBrokers(ctx context.Context, filter store.Run
 	}
 	if filter.AutoProvide != nil {
 		conditions = append(conditions, fmt.Sprintf("auto_provide = $%d", idx))
-		args = append(args, *filter.AutoProvide)
+		args = append(args, boolToInt(*filter.AutoProvide))
 		idx++
 	}
 
